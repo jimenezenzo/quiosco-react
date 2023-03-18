@@ -1,13 +1,13 @@
 import {createContext, useState, useEffect} from 'react'
 import { toast } from 'react-toastify';
-import { categorias as categoriasDB } from "../data/categorias"
+import clienteAxios from '../config/axios';
 
 const QuioscoContext = createContext();
 
 const QuioscoProvider = ({children}) => {
 
-    const [categorias, setCategorias] = useState(categoriasDB)
-    const [categoriaActual, setCategoriaActual] = useState(categorias[0])
+    const [categorias, setCategorias] = useState([])
+    const [categoriaActual, setCategoriaActual] = useState({})
     const [modal, setModal] = useState(false)
     const [producto, setProducto] = useState({})
     const [pedido, setPedido] = useState([])
@@ -17,6 +17,26 @@ const QuioscoProvider = ({children}) => {
         const nuevoTotal = pedido.reduce( (total, producto) => (producto.precio * producto.cantidad) + total, 0 )
         setTotal(nuevoTotal)
     }, [pedido])
+
+    const obtenerCategorias = async () => {
+        const token = localStorage.getItem('AUTH_TOKEN')
+
+        try {
+            const { data } = await clienteAxios('/api/categorias', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+            setCategorias(data.data)
+            setCategoriaActual(data.data[0])
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    useEffect(() => {
+        obtenerCategorias();
+    }, [])
 
     const handleClickCategoria = id => {
         const categoria = categorias.find( categoria => categoria.id === id )
@@ -54,6 +74,69 @@ const QuioscoProvider = ({children}) => {
         toast.success('Eliminado del pedido')
     }
 
+    const handleSubmitNuevaOrden = async (logout) => {
+        const token = localStorage.getItem('AUTH_TOKEN')
+
+        try {
+            const {data} = await clienteAxios.post('/api/pedidos', 
+            {
+                total,
+                productos: pedido.map(producto => {
+                    return {
+                        id: producto.id,
+                        cantidad: producto.cantidad
+                    }
+                })
+            },  
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+
+            toast.success(data.message)
+
+            setTimeout(() => {
+                setPedido([])
+            }, 1000);
+
+            setTimeout(() => {
+                localStorage.removeItem('AUTH_TOKEN')
+                logout()
+            }, 3000);
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const handleClickCompletarPedido = async id => {
+        const token = localStorage.getItem('AUTH_TOKEN')
+
+        try {
+            await clienteAxios.put(`/api/pedidos/${id}`, null, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const handleClickProductoAgotado = async id => {
+        const token = localStorage.getItem('AUTH_TOKEN')
+
+        try {
+            await clienteAxios.put(`/api/productos/${id}`, null, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
     return (
         <QuioscoContext.Provider
             value={{
@@ -68,7 +151,10 @@ const QuioscoProvider = ({children}) => {
                 handleSetProducto,
                 handleAgregarPedido,
                 handleEditarCantidad,
-                handleEliminarProductoPedido
+                handleEliminarProductoPedido,
+                handleSubmitNuevaOrden,
+                handleClickCompletarPedido,
+                handleClickProductoAgotado
             }}
         >
             {children}
